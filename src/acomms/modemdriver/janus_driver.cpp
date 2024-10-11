@@ -113,6 +113,7 @@ janus_simple_tx_t goby::acomms::JanusDriver::init_janus_tx(){
 } // init janus tx
 
 janus_simple_rx_t goby::acomms::JanusDriver::init_janus_rx(){
+    std::cerr << "Is the error in init_janus_rx()? \n";
     simple_rx = janus_simple_rx_new(params_rx);
     if (!simple_rx){
       glog.is(DEBUG1) && glog << "ERROR: failed to initialize receiver" << std::endl;
@@ -127,6 +128,7 @@ janus_simple_rx_t goby::acomms::JanusDriver::init_janus_rx(){
 } // init janus rx
 
 void goby::acomms::JanusDriver::startup(const protobuf::DriverConfig& cfg){
+    std::cerr << "Is the error in startup()? \n";
     driver_cfg_ = cfg;
     glog.is(DEBUG1) && glog << group(glog_out_group()) << "JanusDriver configuration good" << std::endl;
     ModemDriverBase::modem_start(driver_cfg_);
@@ -145,12 +147,14 @@ void goby::acomms::JanusDriver::shutdown(){
 } // shutdown
 
 void goby::acomms::JanusDriver::append_crc16(std::vector<std::uint8_t> &vec){
+    std::cerr << "Is the error in append_crc16()? \n";
     std::uint16_t crc = janus_crc_16(vec.data(),vec.size(),0);
     vec.push_back(static_cast<std::uint8_t>(crc >> 8));
     vec.push_back(static_cast<std::uint8_t>(crc & 0xff));
 } // append crc16
 
 void goby::acomms::JanusDriver::send_janus_packet(const protobuf::ModemTransmission& msg, std::vector<std::uint8_t> payload, bool ack){
+    std::cerr << "Is the error in send_janus_packet()? \n";
     if(tx_class_id == 16 && tx_application_type == 1) { append_crc16(payload); }
     int desired_cargo_size = payload.size();
     int ack_request = ack == true ? 1 : 0;
@@ -188,11 +192,13 @@ void goby::acomms::JanusDriver::send_janus_packet(const protobuf::ModemTransmiss
 } // send_janus_packet 
 
 void goby::acomms::JanusDriver::send_janus_packet_thread(const protobuf::ModemTransmission& msg, std::vector<std::uint8_t> payload, bool ack){
+    std::cerr << "Is the error in send_janus_packet_thread()? \n";
     std::thread t(&goby::acomms::JanusDriver::send_janus_packet, this, msg, payload, ack);
     t.detach();
 }
 
 void goby::acomms::JanusDriver::handle_initiate_transmission(const protobuf::ModemTransmission& orig_msg){
+    std::cerr << "Is the error in handle_initiate_transmission()? \n";
     // copy so we can modify
     protobuf::ModemTransmission msg = orig_msg;
     msg.set_max_num_frames(1);
@@ -229,12 +235,14 @@ void goby::acomms::JanusDriver::handle_initiate_transmission(const protobuf::Mod
 } // handle_initiate_transmission
 
 std::uint8_t goby::acomms::JanusDriver::get_goby_header(const protobuf::ModemTransmission& msg){
+    std::cerr << "Is the error in get_goby_header()? \n";
     std::uint8_t goby_header = CreateGobyHeader(msg);
     glog.is(DEBUG1) && glog << "header byte: " << (int) goby_header  << std::endl;
     return goby_header;
 } // get_goby_header
 
 void goby::acomms::JanusDriver::handle_ack_transmission(const protobuf::ModemTransmission& msg){
+    std::cerr << "Is the error in handle_ack_transmission()? \n";
     glog.is(DEBUG1) && glog << group(glog_out_group())
                             << "We were asked to transmit ack from " << msg.src() << " to "
                             << msg.dest() << " for frame " << msg.acked_frame(0) << std::endl;
@@ -243,6 +251,7 @@ void goby::acomms::JanusDriver::handle_ack_transmission(const protobuf::ModemTra
 } // handle_ack_transmission
 
 void goby::acomms::JanusDriver::send_ack(unsigned int src, unsigned int dest, unsigned int frame_number){
+    std::cerr << "Is the error in send_ack()? \n";
     protobuf::ModemTransmission ack;
     ack.set_type(goby::acomms::protobuf::ModemTransmission::ACK);
     ack.set_src(dest);
@@ -255,6 +264,7 @@ void goby::acomms::JanusDriver::send_ack(unsigned int src, unsigned int dest, un
 
 // Not currently used but may be useful to pad messages to multiples of 8 bytes
 void goby::acomms::JanusDriver::pad_message(std::vector<uint8_t> &vec) {
+    std::cerr << "Is the error in pad_message()? \n";
     if (vec.size() % 8 != 0) {
         int num_to_pad = 8 - (vec.size() % 8) - 2; // leave space for crc?
         if(vec.size() < 8 && vec.size() % 2 != 0){num_to_pad += 8;} // min padding size is  16
@@ -263,6 +273,7 @@ void goby::acomms::JanusDriver::pad_message(std::vector<uint8_t> &vec) {
 } // pad_message
 
 janus_rx_msg_pkt goby::acomms::JanusDriver::parse_janus_packet(const janus_packet_t pkt, bool verbosity){
+    std::cerr << "Is the error in parse_janus_packet()? \n";
     unsigned i;
     unsigned int cargo_size;
 
@@ -321,11 +332,13 @@ janus_rx_msg_pkt goby::acomms::JanusDriver::parse_janus_packet(const janus_packe
 }
 
 unsigned int goby::acomms::JanusDriver::get_frame_num(std::string header){
+    std::cerr << "Is the error in get_frame_num()? \n";
     int frame_number =  std::stoi(header, nullptr, 16) & 0b00111111;
     return frame_number;
 }
 
 void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,protobuf::ModemTransmission& msg){
+    std::cerr << "Is the error in to_modem_transmission()? \n";
     msg.set_src(packet.station_id);
     msg.set_dest(packet.destination_id);
     msg.set_rate(0);
@@ -346,6 +359,7 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
 }
 
 void goby::acomms::JanusDriver::do_work(){
+    std::cerr << "Is the error in do_work()? \n";
     janus_rx_msg_pkt packet_parsed;
     std::string binary_msg;
     int retval = janus_rx_execute(janus_simple_rx_get_rx(simple_rx), packet_rx, state_rx);
@@ -386,6 +400,7 @@ void goby::acomms::JanusDriver::do_work(){
 
 // Format is 2 bits for type, 6 bits for frame counter
 std::uint8_t goby::acomms::JanusDriver::CreateGobyHeader(const protobuf::ModemTransmission& m){
+    std::cerr << "Is the error in CreateGobyHeader()? \n";
     std::uint8_t header{0};
     if (m.type() == protobuf::ModemTransmission::DATA){
         header |= ( GOBY_DATA_TYPE & 0b11 ) << 6;
@@ -401,6 +416,7 @@ std::uint8_t goby::acomms::JanusDriver::CreateGobyHeader(const protobuf::ModemTr
 } // CreateGobyHeader
 
 void goby::acomms::JanusDriver::DecodeGobyHeader(std::uint8_t header, protobuf::ModemTransmission& m){
+    std::cerr << "Is the error in DecodeGobyHeader()? \n";
     int frame_number = header & 0b00111111;
     m.set_type((( (header >> 6) & 0b11 ) == GOBY_ACK_TYPE ) ? protobuf::ModemTransmission::ACK: protobuf::ModemTransmission::DATA);
     if (m.type() == protobuf::ModemTransmission::DATA)
