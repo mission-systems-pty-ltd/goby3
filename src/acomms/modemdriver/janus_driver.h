@@ -113,6 +113,7 @@ class JanusDriver : public ModemDriverBase
     unsigned queried_detection_time;
     janus_carrier_sensing_t carrier_sensing;
     protobuf::ModemTransmission modem_msg;
+    int counter = 0;
 
   private:
     const janus::protobuf::Config& janus_driver_rx_cfg() const

@@ -140,6 +140,7 @@ void goby::acomms::JanusDriver::startup(const protobuf::DriverConfig& cfg){
     rx_class_id         = janus_driver_rx_cfg().application_type();
     simple_tx           = init_janus_tx();
     simple_rx           = init_janus_rx();
+    counter             = 0; // For debug print statements
 } // startup
 
 void goby::acomms::JanusDriver::shutdown(){
@@ -359,7 +360,12 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
 }
 
 void goby::acomms::JanusDriver::do_work(){
-    // std::cerr << "Is the error in do_work()? \n";
+    counter++; 
+    if (counter % 50 == 0)
+    {
+        std::cerr << "Is the error in do_work()? \n";
+        counter = 1; // To avoid overflow
+    }
     janus_rx_msg_pkt packet_parsed;
     std::string binary_msg;
     int retval = janus_rx_execute(janus_simple_rx_get_rx(simple_rx), packet_rx, state_rx);
