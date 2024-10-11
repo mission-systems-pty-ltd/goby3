@@ -359,7 +359,7 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
 }
 
 void goby::acomms::JanusDriver::do_work(){
-    std::cerr << "Is the error in do_work()? \n";
+    // std::cerr << "Is the error in do_work()? \n";
     janus_rx_msg_pkt packet_parsed;
     std::string binary_msg;
     int retval = janus_rx_execute(janus_simple_rx_get_rx(simple_rx), packet_rx, state_rx);
