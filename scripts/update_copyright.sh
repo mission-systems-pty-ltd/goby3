@@ -20,8 +20,8 @@ gen_authors()
 {
     i=$1
     echo $i;
-    mapfile -t authors < <(git blame --line-porcelain $i | grep "^author " | sort | uniq -c | sort -nr | sed 's/^ *//' | cut -d " " -f 3-)
-    #    echo ${authors[@]}
+    mapfile -t author_emails < <(git blame --line-porcelain $i | grep "^author-mail " | sort | uniq -c | sort -nr | sed 's/^ *//' | cut -d " " -f 3-)
+    #    echo ${author_emails[@]}
     start_year=$(git log --follow --date=format:%Y --format=format:%ad $i | tail -n 1)
     end_year=$(git log --follow -n 1 --date=format:%Y --format=format:%ad $i)
     #    echo ${start_year}-${end_year}    
@@ -48,14 +48,18 @@ EOF
 // File authors:
 EOF
     
-    for author in "${authors[@]}"
+    for email in "${author_emails[@]}"
     do
         # use latest email for author name here
-        email=$(git log --use-mailmap --author "$author" -n 1 --format=format:%aE)
-        if [ ! -z "$email" ]; then
-            email=" <${email}>"
+        author=$(git log --use-mailmap --author "$email" -n 1 --format=format:%aN)
+        proper_email=$(git log --use-mailmap --author "$author" -n 1 --format=format:%aE)
+        proper_author=$(git log --use-mailmap --author "$proper_email" -n 1 --format=format:%aN)
+        if [ ! -z "$proper_email" ]; then
+            proper_email=" <${proper_email}>"
         fi
-        echo "//   $author$email"  >> /tmp/goby_authors.tmp
+        if ! grep -q $proper_email /tmp/goby_authors.tmp; then
+            echo "//   $proper_author$proper_email"  >> /tmp/goby_authors.tmp
+        fi
     done
 }
 

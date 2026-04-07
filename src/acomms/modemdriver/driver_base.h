@@ -1,4 +1,4 @@
-// Copyright 2009-2023:
+// Copyright 2009-2025:
 //   GobySoft, LLC (2013-)
 //   Massachusetts Institute of Technology (2007-2014)
 //   Community contributors (see AUTHORS file)
@@ -100,9 +100,6 @@ class ModemDriverBase
     /// You should connect one or more slots (a function or member function) to this signal to receive incoming messages. Use the goby::acomms::connect family of functions to do this. This signal will only be called during a call to poll. ModemDataTransmission is defined in acomms_modem_message.proto.
     boost::signals2::signal<void(const protobuf::ModemTransmission& message)>
         signal_transmit_result;
-
-    boost::signals2::signal<void(std::string msg_out)>
-        signal_transmit;
 
     /// \brief Called when the modem or modem driver needs data to send. The returned data should be stored in ModemTransmission::frame
     ///

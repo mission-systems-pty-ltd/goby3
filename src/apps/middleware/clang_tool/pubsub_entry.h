@@ -1,4 +1,4 @@
-// Copyright 2020-2021:
+// Copyright 2020-2025:
 //   GobySoft, LLC (2013-)
 //   Community contributors (see AUTHORS file)
 // File authors:
@@ -291,7 +291,7 @@ struct Thread
                                            most_derived_name());
     }
 
-    std::string most_derived_name()
+    std::string most_derived_name() const
     {
         if (parent)
             return parent->most_derived_name();

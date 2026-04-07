@@ -1,4 +1,4 @@
-// Copyright 2016-2022:
+// Copyright 2016-2025:
 //   GobySoft, LLC (2013-)
 //   Community contributors (see AUTHORS file)
 // File authors:
@@ -26,7 +26,7 @@
 
 #include "goby/middleware/log.h"
 #include "goby/middleware/marshalling/json.h"
-#include "goby/middleware/protobuf/log_tool_config.pb.h"
+#include "goby/middleware/protobuf/log_convert_tool_config.pb.h"
 #include "goby/time/convert.h"
 #include "log_plugin.h"
 

@@ -1,8 +1,10 @@
-// Copyright 2017-2024:
+// Copyright 2017-2025:
 //   GobySoft, LLC (2013-)
 //   Community contributors (see AUTHORS file)
 // File authors:
 //   Toby Schneider <toby@gobysoft.org>
+//   Thomas McCabe <tom.mccabe@missionsystems.com.au>
+//   Jared Silbermann <jared.silbermann@missionsystems.com.au>
 //
 //
 // This file is part of the Goby Underwater Autonomy Project Libraries

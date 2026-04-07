@@ -10,12 +10,12 @@ endmacro()
 ## find external packages, libraries, and headers for the entire goby project
 #mandatory
 goby_find_required_package(ProtobufGoby)
-include_directories(${PROTOBUF_INCLUDE_DIRS})
+include_directories(${Protobuf_INCLUDE_DIRS})
 
-string(STRIP ${PROTOC_VERSION} PROTOC_VERSION_CLEAN)
-message(STATUS "Using Protocol Buffers ${PROTOC_VERSION_CLEAN}: ${PROTOBUF_INCLUDE_DIRS}")
+string(STRIP ${protobuf_VERSION} PROTOC_VERSION_CLEAN)
+message(STATUS "Using Protocol Buffers ${protobuf_VERSION}: ${Protobuf_INCLUDE_DIRS}")
 
-if(${PROTOC_VERSION} VERSION_LESS 3.0.0) 
+if(${protobuf_VERSION} VERSION_LESS 3.0.0) 
   message(STATUS "\tlibprotobuf < 3.0.0, removing syntax= string")
   set(PROTOBUF_HAS_SYNTAX_VERSION FALSE PARENT_SCOPE)
 else()
@@ -36,9 +36,6 @@ if(DCCL_INCLUDE_DIR)
   include_directories("${DCCL_INCLUDE_DIR}")
   protobuf_include_dirs("${DCCL_INCLUDE_DIR}")
 endif()
-
-# Add popoto api to cmake
-set(POPOTO_ROOT_DIR /opt/PopotoAPI/CPP/popoto_client CACHE PATH "Top level directory for Popoto API.")
 
 #proj
 goby_find_required_package(Proj)
@@ -129,11 +126,11 @@ if(enable_openssl)
 endif()
 
 ## Wt
-find_package(WtGoby QUIET)
+find_package(Wt QUIET)
 set(WT_DOC_STRING "Enable Wt web browser GUI components (requires libwt-dev, libwtdbo-dev, libwtdbosqlite-dev, and libwthttp-dev: http://www.webtoolkit.eu/wt)")
 #find resources directory
 find_path(Wt_RESOURCES_DIR_BASE share/Wt/resources/plus.gif /usr /usr/local)
-if(WTGOBY_FOUND AND Wt_RESOURCES_DIR_BASE)
+if(Wt_FOUND AND Wt_RESOURCES_DIR_BASE)
   option(enable_wt ${WT_DOC_STRING} ON)
 else()
   option(enable_wt ${WT_DOC_STRING} OFF)
@@ -141,8 +138,9 @@ else()
 endif()
 
 if(enable_wt)
-  goby_find_required_package(WtGoby)    
-  include_directories(${Wt_INCLUDE_DIR})
+  goby_find_required_package(Wt)
+  get_target_property(Wt_INCLUDE_DIR Wt::Wt INTERFACE_INCLUDE_DIRECTORIES)
+  include_directories(SYSTEM ${Wt_INCLUDE_DIR})
   set(Wt_RESOURCES_DIR "${Wt_RESOURCES_DIR_BASE}/share/Wt/resources")
   add_custom_command(OUTPUT WtResourcesLink COMMAND ${CMAKE_COMMAND} -E create_symlink ${Wt_RESOURCES_DIR} ${goby_SHARE_DIR}/goby/liaison/resources)
   add_custom_target(wt_link ALL DEPENDS WtResourcesLink)
@@ -177,8 +175,7 @@ include(FindLLVMForGoby)
 
 macro(generate_middleware_interfaces target) 
   if(enable_llvm)
-    goby_export_interface(${target} ${goby_INTERFACES_DIR} ${target}_YML_OUT)
-    add_custom_target(${target}_interface ALL DEPENDS ${${target}_YML_OUT})
+    goby_export_interface(${target} ${goby_INTERFACES_DIR} "${CMAKE_BINARY_DIR}/share/goby/doc/html/images" ${target}_YML_OUT)
   endif()
 endmacro()
 
@@ -216,7 +213,7 @@ endmacro()
 goby_find_required_package(Boost 1.58.0 COMPONENTS system date_time program_options filesystem)
 include_directories(${Boost_INCLUDE_DIRS})
 
-protobuf_generate_cpp(BASE_PROTO_SRCS BASE_PROTO_HDRS 
+protobuf_generate_cpp_dccl(BASE_PROTO_SRCS BASE_PROTO_HDRS 
   protobuf/option_extensions.proto
   )
 
@@ -225,6 +222,7 @@ include(acomms/src.cmake)
 include(util/src.cmake)
 include(time/src.cmake)
 include(middleware/src.cmake)
+include(udpm/src.cmake)
 
 if(NOT enable_janus_acomms)
   list(FILTER ACOMMS_SRC EXCLUDE REGEX ".*janus_driver.cpp")
@@ -240,6 +238,7 @@ add_library(goby
   ${UTIL_SRC}
   ${TIME_SRC}
   ${MIDDLEWARE_SRC}
+  ${UDPM_SRC}
   )
 
 
@@ -250,12 +249,16 @@ target_link_libraries(goby
   boost_filesystem
   boost_program_options
   boost_date_time
-  ${PROTOBUF_LIBRARY}
+  protobuf::libprotobuf
   ${PROJ_LIBRARY}
   )
 
 if (enable_popoto_acomms)
-  target_include_directories(goby PUBLIC ${POPOTO_ROOT_DIR}/include)
+  if(NOT POPOTO_ROOT_DIR)
+    message(FATAL_ERROR "You must set POPOTO_ROOT_DIR to the Top level directory for Popoto API (cmake -DPOPOTO_ROOT_DIR=/path/to/PopotoAPI/CPP/popoto_client)")
+  endif()
+  
+  target_include_directories(goby SYSTEM PUBLIC ${POPOTO_ROOT_DIR}/include)
 
   add_definitions(-DENABLE_POPOTO_ACOMMS)
   target_link_libraries(goby
@@ -264,14 +267,20 @@ if (enable_popoto_acomms)
 endif()
 
 if(enable_janus_acomms)
+  if(NOT JANUS_ROOT_DIR)
+    message(FATAL_ERROR "You must set JANUS_ROOT_DIR to the Top level directory for JANUS library (cmake -DJANUS_ROOT_DIR=/path/to/janus-c)")
+  endif()
+
+  target_include_directories(goby SYSTEM PUBLIC ${JANUS_ROOT_DIR}/src/c ${JANUS_ROOT_DIR}/build/cmake_generated)
   add_definitions(-DENABLE_JANUS_ACOMMS)
   target_link_libraries(goby
     janus 
     fftw3
     asound
     pulse-simple
-    /usr/local/share/janus/plugins/libplugin_016_00.so
-    /usr/local/share/janus/plugins/libplugin_016_01.so
+    pulse
+    ${JANUS_ROOT_DIR}/build/libplugin_016_00.so
+    ${JANUS_ROOT_DIR}/build/libplugin_016_01.so
   )
 endif()
 

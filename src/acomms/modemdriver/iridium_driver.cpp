@@ -1,4 +1,4 @@
-// Copyright 2013-2024:
+// Copyright 2013-2025:
 //   GobySoft, LLC (2013-)
 //   Massachusetts Institute of Technology (2007-2014)
 //   Community contributors (see AUTHORS file)
@@ -322,6 +322,10 @@ void goby::acomms::IridiumDriver::do_work()
             hangup();
         }
     }
+
+    // we have to check this timeout separately due to the nature of the SBDWrite transaction
+    if (fsm_.state_cast<const iridium::fsm::SBDWrite*>())
+        fsm_.process_event(iridium::fsm::EvSBDCheckWriteTimeout());
 
     try_serial_tx();
 

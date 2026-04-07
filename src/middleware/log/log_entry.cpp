@@ -1,4 +1,4 @@
-// Copyright 2017-2024:
+// Copyright 2017-2025:
 //   GobySoft, LLC (2013-)
 //   Community contributors (see AUTHORS file)
 // File authors:
@@ -83,7 +83,7 @@ void LogEntry::parse_version(std::istream* s)
         version_ = current_version_;
     }
 
-    glog.is_verbose() && glog << "File version is " << version_ << std::endl;
+    glog.is_debug1() && glog << "File version is " << version_ << std::endl;
 }
 
 void LogEntry::parse(std::istream* s)

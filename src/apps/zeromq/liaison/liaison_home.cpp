@@ -1,4 +1,4 @@
-// Copyright 2011-2021:
+// Copyright 2011-2025:
 //   GobySoft, LLC (2013-)
 //   Massachusetts Institute of Technology (2007-2014)
 //   Community contributors (see AUTHORS file)
@@ -24,24 +24,25 @@
 
 #include "liaison_home.h"
 
-#include <Wt/WBreak>           // for WBreak
-#include <Wt/WContainerWidget> // for WContainerWidget
-#include <Wt/WLength>          // for Wt
-#include <Wt/WText>            // for WText
-#include <Wt/WVBoxLayout>      // for WVBoxLayout
+#include <Wt/WBreak.h>           // for WBreak
+#include <Wt/WContainerWidget.h> // for WContainerWidget
+#include <Wt/WLength.h>          // for Wt
+#include <Wt/WText.h>            // for WText
+#include <Wt/WVBoxLayout.h>      // for WVBoxLayout
 
-using namespace Wt;
-
-goby::apps::zeromq::LiaisonHome::LiaisonHome() : main_layout_(new Wt::WVBoxLayout(this))
+goby::apps::zeromq::LiaisonHome::LiaisonHome()
 {
-    auto* top_text = new Wt::WContainerWidget(this);
-    main_layout_->addWidget(top_text);
+    auto main_layout = std::make_unique<Wt::WVBoxLayout>();
 
-    top_text->addWidget(new WText("Welcome to Goby Liaison: an extensible tool for commanding and "
-                                  "comprehending this Goby platform."));
-    top_text->addWidget(new WBreak());
-    top_text->addWidget(new WText("<i>liaison (n): one that establishes and maintains "
-                                  "communication for mutual understanding and cooperation</i>"));
+    auto top_text = std::make_unique<Wt::WContainerWidget>();
+    top_text->addNew<Wt::WText>("Welcome to Goby Liaison: an extensible tool for commanding and "
+                                "comprehending this Goby platform.");
+    top_text->addNew<Wt::WBreak>();
 
+    top_text->addNew<Wt::WText>("<i>liaison (n): one that establishes and maintains "
+                                "communication for mutual understanding and cooperation</i>");
+    main_layout->addWidget(std::move(top_text));
+
+    this->setLayout(std::move(main_layout));
     set_name("Home");
 }

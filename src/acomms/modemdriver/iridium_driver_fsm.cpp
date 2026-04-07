@@ -1,4 +1,4 @@
-// Copyright 2013-2023:
+// Copyright 2013-2025:
 //   GobySoft, LLC (2013-)
 //   Massachusetts Institute of Technology (2007-2014)
 //   Community contributors (see AUTHORS file)
@@ -447,4 +447,21 @@ void goby::acomms::iridium::fsm::OnCall::in_state_react(const EvSendBye&)
 {
     context<IridiumDriverFSM>().serial_tx_buffer().push_front("bye\r");
     set_bye_sent(true);
+}
+
+void goby::acomms::iridium::fsm::SBDWrite::in_state_react(const EvSBDCheckWriteTimeout&)
+{
+    enum
+    {
+        SBDWRITE_TIMEOUT_SECONDS = 4
+    };
+    auto now = goby::time::SteadyClock::now();
+    if (now > (entry_time_ + std::chrono::seconds(SBDWRITE_TIMEOUT_SECONDS)))
+    {
+        glog.is(goby::util::logger::WARN) && glog << group("iridiumdriver")
+                                                  << "Timeout waiting for response for SBDWrite"
+                                                  << std::endl;
+        post_event(
+            EvSBDWriteComplete()); // Assume maybe our write worked, or at least do a mailbox check
+    }
 }

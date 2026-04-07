@@ -1,4 +1,4 @@
-// Copyright 2020-2023:
+// Copyright 2020-2025:
 //   GobySoft, LLC (2013-)
 //   Community contributors (see AUTHORS file)
 // File authors:
@@ -248,6 +248,42 @@ struct Application
     std::set<PubSubEntry> intervehicle_publishes;
     std::set<PubSubEntry> intervehicle_subscribes;
 };
+
+bool is_thread_included(const Application& application, const viz::Thread& thread)
+{
+    if (g_params.omit_interthread)
+    {
+        auto check_for_non_interthread_pubsub =
+            [&thread](const std::set<PubSubEntry>& pubsubs) -> bool
+        {
+            for (const auto& entry : pubsubs)
+            {
+                if (entry.thread == thread.most_derived_name())
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        if (check_for_non_interthread_pubsub(application.interprocess_publishes))
+            return true;
+        if (check_for_non_interthread_pubsub(application.interprocess_subscribes))
+            return true;
+        if (check_for_non_interthread_pubsub(application.intermodule_publishes))
+            return true;
+        if (check_for_non_interthread_pubsub(application.intermodule_subscribes))
+            return true;
+        if (check_for_non_interthread_pubsub(application.intervehicle_publishes))
+            return true;
+        if (check_for_non_interthread_pubsub(application.intervehicle_subscribes))
+            return true;
+
+        return false;
+    }
+
+    return true;
+}
 
 inline bool operator<(const Application& a, const Application& b) { return a.name < b.name; }
 
@@ -557,6 +593,9 @@ void write_thread_connections(std::ofstream& ofs, const viz::Platform& platform,
                               const viz::Module& module, const viz::Application& application,
                               const viz::Thread& thread, std::set<PubSubEntry>& disconnected_subs)
 {
+    if (g_params.omit_interthread)
+        return;
+
     std::set<PubSubEntry> disconnected_pubs;
     for (const auto& pub : thread.interthread_publishes)
     {
@@ -757,6 +796,37 @@ int goby::clang::visualize(const std::vector<std::string>& yamls, const Visualiz
         std::cout << "Failed to parse deployment file: " << params.deployment << ": " << e.what()
                   << std::endl;
     }
+
+    if (!deploy_yaml["deployment"])
+    {
+        // check if this is singular interfaces file instead
+        if (deploy_yaml["application"])
+        {
+            std::string application_name = deploy_yaml["application"].as<std::string>();
+            std::string yaml_filename = yamls.at(0);
+            // it is, make a mini degenerate deploy_yaml
+            YAML::Node degenerate_deploy_yaml;
+            degenerate_deploy_yaml["deployment"] = application_name + "_stub_deployment";
+            YAML::Node platform;
+            platform["name"] = "goby_platform";
+            YAML::Node interfaces;
+            interfaces.push_back(yaml_filename);
+            platform["interfaces"] = interfaces;
+            YAML::Node platforms;
+            platforms.push_back(platform);
+            degenerate_deploy_yaml["platforms"] = platforms;
+            deploy_yaml = degenerate_deploy_yaml;
+        }
+        else
+        {
+            // nope
+            std::cerr << "Must specify 'deployment: name' in deployment YAML file or provide a "
+                         "single interfaces YAML as the deployment YAML"
+                      << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+
     deployment_name = deploy_yaml["deployment"].as<std::string>();
     YAML::Node platforms_node = deploy_yaml["platforms"];
     if (!platforms_node || !platforms_node.IsSequence())
@@ -970,6 +1040,9 @@ int goby::clang::visualize(const std::vector<std::string>& yamls, const Visualiz
                     const auto& thread = thread_p.second;
 
                     if (!is_node_included(thread->most_derived_name()))
+                        continue;
+
+                    if (!is_thread_included(application.second, *thread))
                         continue;
 
                     write_thread_connections(ofs, platform, module, application.second, *thread,

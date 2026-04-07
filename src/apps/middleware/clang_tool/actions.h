@@ -1,4 +1,4 @@
-// Copyright 2020-2021:
+// Copyright 2020-2025:
 //   GobySoft, LLC (2013-)
 //   Community contributors (see AUTHORS file)
 // File authors:
@@ -54,6 +54,7 @@ struct VisualizeParameters
     std::string dot_splines;
     std::string omit_group_regex;
     std::string omit_node_regex;
+    bool omit_interthread;
 };
 
 int visualize(const std::vector<std::string>& ymls, const VisualizeParameters& params);

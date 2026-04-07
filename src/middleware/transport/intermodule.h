@@ -106,10 +106,13 @@ class InterModuleForwarder
             this->inner()
                 .template subscribe<Base::from_portal_group_,
                                     protobuf::SerializerTransporterMessage>(
-                    [this](const protobuf::SerializerTransporterMessage& msg) {
+                    [this](const protobuf::SerializerTransporterMessage& msg)
+                    {
                         auto range = subscriptions_.equal_range(msg.key());
                         for (auto it = range.first; it != range.second; ++it)
-                        { it->second->post(msg.data().begin(), msg.data().end()); }
+                        {
+                            it->second->post(msg.data().begin(), msg.data().end());
+                        }
                     });
 
         auto local_subscription = std::make_shared<SerializationSubscription<Data, scheme>>(
@@ -172,7 +175,7 @@ class InterModuleForwarder
     // {
     // }
 
-    int _poll(std::unique_ptr<std::unique_lock<std::timed_mutex>>& lock)
+    int _poll(std::unique_ptr<std::unique_lock<std::mutex>>& lock)
     {
         return 0;
     } // A forwarder is a shell, only the inner Transporter has data
@@ -184,10 +187,12 @@ class InterModuleForwarder
 };
 
 template <typename Derived, typename InnerTransporter>
-class InterModulePortalBase : public InterModuleTransporterBase<Derived, InnerTransporter>
+class InterModulePortalBase : public InterModuleTransporterBase<Derived, InnerTransporter>,
+                              public InterProcessPortalCommon<Derived, InnerTransporter>
 {
   public:
     using Base = InterModuleTransporterBase<Derived, InnerTransporter>;
+    using Common = InterProcessPortalCommon<Derived, InnerTransporter>;
 
     InterModulePortalBase(InnerTransporter& inner) : Base(inner) { _init(); }
     InterModulePortalBase() { _init(); }
@@ -200,15 +205,19 @@ class InterModulePortalBase : public InterModuleTransporterBase<Derived, InnerTr
         using goby::middleware::intermodule::protobuf::Subscription;
         using goby::middleware::protobuf::SerializerTransporterMessage;
         this->inner().template subscribe<Base::to_portal_group_, SerializerTransporterMessage>(
-            [this](const SerializerTransporterMessage& d) {
-                static_cast<Derived*>(this)->_receive_publication_forwarded(d);
+            [this](const SerializerTransporterMessage& d)
+            {
+                std::vector<char> data(d.data().begin(), d.data().end());
+                static_cast<Derived*>(this)->_publish_serialized(
+                    d.key().type(), d.key().marshalling_scheme(), data,
+                    goby::middleware::DynamicGroup(d.key().group()));
             });
 
         this->inner().template subscribe<Base::to_portal_group_, Subscription>(
-            [this](const Subscription& s) {
-                auto on_subscribe = [this](const SerializerTransporterMessage& d) {
-                    this->inner().template publish<Base::from_portal_group_>(d);
-                };
+            [this](const Subscription& s)
+            {
+                auto on_subscribe = [this](const SerializerTransporterMessage& d)
+                { this->inner().template publish<Base::from_portal_group_>(d); };
                 auto sub = std::make_shared<SerializationInterModuleSubscription>(on_subscribe, s);
 
                 switch (s.action())

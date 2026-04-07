@@ -1,11 +1,35 @@
+// Copyright 2024-2025:
+//   GobySoft, LLC (2013-)
+//   Community contributors (see AUTHORS file)
+// File authors:
+//   Jared Silbermann <jared.silbermann@missionsystems.com.au>
+//   Toby Schneider <toby@gobysoft.org>
+//
+//
+// This file is part of the Goby Underwater Autonomy Project Libraries
+// ("The Goby Libraries").
+//
+// The Goby Libraries are free software: you can redistribute them and/or modify
+// them under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 2.1 of the License, or
+// (at your option) any later version.
+//
+// The Goby Libraries are distributed in the hope that they will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Goby.  If not, see <http://www.gnu.org/licenses/>.
+
 // Converts the dccl binary to the required comma seperated bytes -- duplication from popoto driver (will fix)
-#include <string>
-#include "goby/acomms/protobuf/modem_message.pb.h" // for ModemTransmi...
 #include "goby/acomms/modemdriver/driver_base.h"   // for ModemDriverBase
 #include "goby/acomms/protobuf/driver_base.pb.h"   // for DriverConfig
+#include "goby/acomms/protobuf/modem_message.pb.h" // for ModemTransmi...
 #include "goby/acomms/protobuf/modem_message.pb.h" // for ModemTransmission
 #include "goby/exception.h"                        // for Exception
 #include "goby/util/thirdparty/nlohmann/json.hpp"  // for json
+#include <string>
 using json = nlohmann::json;
 
 namespace goby
@@ -13,6 +37,7 @@ namespace goby
 namespace acomms
 {
 
+// Used by Mission Systems Popoto and Janus drivers
 enum GobyHeaderBits
 {
     GOBY_DATA_TYPE = 1,
@@ -20,40 +45,5 @@ enum GobyHeaderBits
     GOBY_HEADER_TYPE = 0,       // 0 == Data, 1 == Ack
     GOBY_HEADER_ACK_REQUEST = 1 // 0 == no ack requested, 1 == ack requested
 };
-
-static std::string binary_to_json(const std::uint8_t* buf, size_t num_bytes)
-{
-    std::string output;
-
-    for (int i = 0, n = num_bytes; i < n; i++)
-    {
-        output.append(std::to_string((uint8_t)buf[i]));
-        if (i < n - 1)
-        {
-            output.append(",");
-        }
-    }
-    return output;
 }
-
-// Convert csv values back to dccl binary for the dccl codec to decode
-static std::string json_to_binary(const json& element)
-{
-    std::string output;
-    for (auto& subel : element) { output.append(1, (char)((uint8_t)subel)); }
-    return output;
-}
-
-// Remove popoto trash from the incoming serial string
-static std::string StripString(std::string in, std::string p)
-{
-    std::string out = std::move(in);
-    std::string::size_type n = p.length();
-    for (std::string::size_type i = out.find(p); i != std::string::npos; i = out.find(p))
-        out.erase(i, n);
-
-    return out;
-}
-
-};
-};
+} // namespace goby
