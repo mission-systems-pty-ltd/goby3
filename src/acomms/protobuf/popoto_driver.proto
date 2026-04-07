@@ -48,6 +48,14 @@ message Config
         (goby.field).description =
             "Application type for JANUS message"
     ];
+
+    optional int32 carrier_frequency = 6 [
+        default = 0,
+        (dccl.field).min = 5000,
+        (dccl.field).max = 40000,
+        (goby.field).description =
+            "Custom carrier frequency setting for popoto"
+    ];
 }
 // added 1442 in modem driver
 extend goby.acomms.protobuf.DriverConfig

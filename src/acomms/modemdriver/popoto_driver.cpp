@@ -77,6 +77,7 @@ void goby::acomms::PopotoDriver::startup(const protobuf::DriverConfig& cfg)
     modem_p = popoto_driver_cfg().modem_power();
     int payload_mode = popoto_driver_cfg().payload_mode();
     int start_timeout = popoto_driver_cfg().start_timeout();
+    int custom_carrier_freq = popoto_driver_cfg().carrier_frequency();
     application_type = popoto_driver_cfg().application_type();
 
     if (driver_cfg_.connection_type() == goby::acomms::protobuf::DriverConfig::CONNECTION_SERIAL)
@@ -129,6 +130,14 @@ void goby::acomms::PopotoDriver::startup(const protobuf::DriverConfig& cfg)
     raw.str("");
     raw << "setvaluei LocalID " << driver_cfg_.modem_id() << "\n";
     signal_and_write(raw.str());
+
+    // only set if a custom carrier frequency was provided, otherwise leave at default
+    if(custom_carrier_freq != 0){
+        raw.str("");
+        raw << "setvaluei Carrier " << std::to_string(custom_carrier_freq) << "\n";
+        signal_and_write(raw.str());
+    }
+
 
     // Poll the modem temp and battery voltage
     signal_and_write("getvaluef BatteryVoltage\n");

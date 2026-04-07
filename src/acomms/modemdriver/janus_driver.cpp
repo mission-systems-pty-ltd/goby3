@@ -117,7 +117,7 @@ janus_simple_rx_t goby::acomms::JanusDriver::init_janus_rx(){
     if (!simple_rx){
       glog.is(DEBUG1) && glog << "ERROR: failed to initialize receiver" << std::endl;
       exit(1);
-      janus_parameters_free(params_tx);
+      janus_parameters_free(params_rx);
     }      
     
     carrier_sensing = janus_carrier_sensing_new(janus_simple_rx_get_rx(simple_rx));
@@ -201,7 +201,6 @@ void goby::acomms::JanusDriver::handle_initiate_transmission(const protobuf::Mod
         msg.set_max_frame_bytes(DEFAULT_MTU_BYTES);
 
     ModemDriverBase::signal_modify_transmission(&msg);
-
     if (!msg.has_frame_start())
         msg.set_frame_start(next_frame_);
 
@@ -345,6 +344,7 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
     } 
 }
 
+// RX
 void goby::acomms::JanusDriver::do_work(){
     janus_rx_msg_pkt packet_parsed;
     std::string binary_msg;
