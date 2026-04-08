@@ -135,7 +135,7 @@ void goby::acomms::PopotoDriver::startup(const protobuf::DriverConfig& cfg)
     // only set if a custom carrier frequency was provided, otherwise leave at default
     if(custom_carrier_freq != 0){
         raw.str("");
-        raw << "setvaluei Carrier " << std::to_string(custom_carrier_freq) << "\n";
+        raw << "setcarrier " << std::to_string(custom_carrier_freq) << "\n";
         signal_and_write(raw.str());
     }
 
