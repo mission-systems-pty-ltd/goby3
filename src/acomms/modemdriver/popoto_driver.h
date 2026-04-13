@@ -79,6 +79,8 @@ class PopotoDriver : public ModemDriverBase
     void DecodeGobyHeader(std::uint8_t header, std::uint8_t ack_num,
                           protobuf::ModemTransmission& m);
     void DecodeHeader(std::vector<uint8_t> data, protobuf::ModemTransmission& m);
+    void DecodeJanusGobyHeader(std::uint8_t header, protobuf::ModemTransmission& m);
+
     void ProcessJSON(const std::string& message, protobuf::ModemTransmission& modem_msg);
     std::string change_to_popoto_json(std::string input, size_t pos, std::string setval,
                                       std::string num_type);

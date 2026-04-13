@@ -545,11 +545,13 @@ void goby::acomms::PopotoDriver::DecodeHeader(std::vector<uint8_t> data,
     // Popoto header types
     enum PopotoMessageType
     {
-        DATA_MESSAGE = 0,
+        DATA_MESSAGE = 48,
         RANGE_RESPONSE = 128,
         RANGE_REQUEST = 129,
         STATUS = 130
     };
+
+    std::cerr << "=====> DEBUG DEBUG: data[0]: " << (int) data[0] << std::endl;
 
     // Process binary payload data
     switch (data[0])
@@ -613,6 +615,32 @@ void goby::acomms::PopotoDriver::ProcessJSON(const std::string& message,
     if (label == "Header")
     {
         DecodeHeader(j["Header"], modem_msg);
+    }
+    // These are JANUS transmissions recived through Popoto
+    else if (j.contains("Cargo"))
+    {
+        std::vector<int> cargo = j["Cargo"].get<std::vector<int>>();
+        if (cargo.empty()) return;
+
+        // Goby header is first byte
+        uint8_t goby_header = static_cast<uint8_t>(cargo[0]);
+        DecodeJanusGobyHeader(goby_header, modem_msg);
+
+        // Source/dest from Popoto fields
+        modem_msg.set_src(j.value("StationID", 0));
+        modem_msg.set_dest(j.value("DestinationID", 0));
+        modem_msg.set_rate(0);
+
+        if (modem_msg.type() == protobuf::ModemTransmission::DATA)
+        {
+            // Convert remaining cargo ints to binary string (skip byte 0)
+            std::string frame;
+            frame.reserve(cargo.size() - 1);
+            for (size_t i = 1; i < cargo.size(); ++i)
+                frame += static_cast<char>(cargo[i]);
+
+            modem_msg.add_frame(frame);
+        }
     }
     else if (label == "Data")
     {
@@ -726,3 +754,14 @@ void goby::acomms::PopotoDriver::DecodeGobyHeader(std::uint8_t header, std::uint
         m.add_acked_frame( ack_num );
     }
 }
+
+void goby::acomms::PopotoDriver::DecodeJanusGobyHeader(std::uint8_t header, protobuf::ModemTransmission& m){
+    int frame_number = header & 0b00111111;
+    m.set_type((( (header >> 6) & 0b11 ) == GOBY_ACK_TYPE ) ? protobuf::ModemTransmission::ACK: protobuf::ModemTransmission::DATA);
+    if (m.type() == protobuf::ModemTransmission::DATA)
+        m.set_frame_start( frame_number );
+    else if (m.type() == protobuf::ModemTransmission::ACK){
+        m.set_frame_start(frame_number);
+        m.add_acked_frame( frame_number );
+    }
+} // DecodeGobyHeader
