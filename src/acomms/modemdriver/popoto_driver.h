@@ -61,10 +61,12 @@ class PopotoDriver : public ModemDriverBase
     void shutdown() override;
     void do_work() override;
     void handle_initiate_transmission(const protobuf::ModemTransmission& m) override;
+    void update_cfg(const protobuf::DriverConfig& cfg) override;
+
     void send(protobuf::ModemTransmission& msg);
     void play_file(protobuf::ModemTransmission& msg);
     void send_ping(protobuf::ModemTransmission& msg);
-    void popoto_update_power(protobuf::ModemTransmission& msg);
+    
     void send_wake(void);
     void send_range_request(int dest);
     void popoto_sleep(void);
@@ -73,18 +75,16 @@ class PopotoDriver : public ModemDriverBase
     void parse_in(const std::string& in, std::map<std::string, std::string>* out);
     void signal_and_write(const std::string& raw);
 
-    // 2 byte header code
-    // std::uint16_t CreateGobyHeader(const protobuf::ModemTransmission& m);
-    std::uint8_t CreateGobyHeader(const protobuf::ModemTransmission& m);
-    void DecodeGobyHeader(std::uint8_t header, std::uint8_t ack_num,
-                          protobuf::ModemTransmission& m);
-    void DecodeHeader(std::vector<uint8_t> data, protobuf::ModemTransmission& m);
-    void DecodeJanusGobyHeader(std::uint8_t header, protobuf::ModemTransmission& m);
+    std::uint8_t CreateJanusCargoHeader(const protobuf::ModemTransmission& m);
+    
+    void DecodeJanusCargoHeader(std::uint8_t header, protobuf::ModemTransmission& m);
+    void DecodePopotoHeader(std::vector<uint8_t> data, protobuf::ModemTransmission& m);
 
     void ProcessJSON(const std::string& message, protobuf::ModemTransmission& modem_msg);
     std::string change_to_popoto_json(std::string input, size_t pos, std::string setval,
                                       std::string num_type);
     std::string setrate_to_payload_mode(std::string setRate);
+
 
     const popoto::protobuf::Config& popoto_driver_cfg() const
     {
