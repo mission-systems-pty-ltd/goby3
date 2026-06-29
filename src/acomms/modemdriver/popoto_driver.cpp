@@ -275,6 +275,8 @@ void goby::acomms::PopotoDriver::handle_initiate_transmission(
 
                 case popoto::protobuf::POPOTO_DEEP_SLEEP: popoto_sleep(); break;
 
+                case popoto::protobuf::POPOTO_SET_TX: popoto_update_power(msg); break;
+
                 case popoto::protobuf::POPOTO_WAKE:
                     send_wake(); // the wake will just be a ping for the moment
                     break;
@@ -312,6 +314,20 @@ void goby::acomms::PopotoDriver::popoto_sleep(void)
 
     //This will put the modem into deep sleep mode to wake up on next acoustic signal
     signal_and_write("powerdown\n");
+}
+
+void goby::acomms::PopotoDriver::popoto_update_power(protobuf::ModemTransmission& msg)
+{
+    glog.is(DEBUG1) && glog << msg.DebugString() << std::endl;
+
+    std::stringstream message;
+    message << "setvaluef TxPowerWatts " << msg.GetExtension(popoto::protobuf::transmission).transmit_power() << "\n";
+
+    // Also update in the popoto driver config so we don't overwrite it
+    modem_p = msg.GetExtension(popoto::protobuf::transmission).transmit_power();
+
+    // send over the wire
+    signal_and_write(message.str());
 }
 
 //--------------------------------------- play_file ------------------------------------------------------------
@@ -360,7 +376,7 @@ void goby::acomms::PopotoDriver::send(protobuf::ModemTransmission& msg)
     raw1 << "setvaluei RemoteID " << dest << "\n";
     signal_and_write(raw1.str());
 
-    uint8_t header = CreateJanusCargoHeader(msg);
+    uint8_t header = CreatePayloadHeader(msg);
 
     std::string jsonStr = binary_to_json(&header, 1);
     if (msg.type() == protobuf::ModemTransmission::DATA)
@@ -452,7 +468,9 @@ void goby::acomms::PopotoDriver::do_work()
                         ack.set_rate(0);
 
                         ack.set_type(goby::acomms::protobuf::ModemTransmission::ACK);
-                        ack.set_frame_start(modem_msg_.frame_start());
+                        for (int i = modem_msg_.frame_start(), n = modem_msg_.frame_size() + modem_msg_.frame_start(); i < n; ++i){
+                            ack.set_frame_start(i);
+                        }
 
                         send(ack); // reply with the ack msg
                     }
@@ -571,6 +589,8 @@ void goby::acomms::PopotoDriver::DecodePopotoHeader(std::vector<uint8_t> data,
         STATUS = 130
     };
 
+    glog.is(DEBUG1) && glog << "data[0]: " << (int) data[0] << std::endl;
+
     // Process binary payload data
     switch (data[0])
     {
@@ -605,6 +625,15 @@ void goby::acomms::PopotoDriver::DecodePopotoHeader(std::vector<uint8_t> data,
 
         default: glog.is(DEBUG1) && glog << "Unknown message type: " << data[0] << std::endl; break;
     }
+
+    int sender = data[1];
+    modem_msg.set_src(sender == POPOTO_BROADCAST_ID ? goby::acomms::BROADCAST_ID : sender);
+    int receiver = data[2];
+    modem_msg.set_dest(receiver == POPOTO_BROADCAST_ID ? goby::acomms::BROADCAST_ID : receiver);
+    int tx_power = data[3];
+    sender_id_ = sender;
+    glog.is(DEBUG1) && glog << type << " from " << sender << " to " << receiver
+                            << " at tx power: " << tx_power << std::endl;
 }
 
 // The only msg that is important for the dccl driver is the header and data. We will just print everything else to terminal for the moment
@@ -620,8 +649,8 @@ void goby::acomms::PopotoDriver::ProcessJSON(const std::string& message,
     raw.set_raw(message);
     if (label == "Header")
     {
-        glog.is(DEBUG1) && glog << label << ": " << j[label] << std::endl;
-        // DecodePopotoHeader(j["Header"], modem_msg);
+        // Don't need for JANUS comms but guessing we do for popoto<-->popoto
+        DecodePopotoHeader(j["Header"], modem_msg);
     }
     // These are JANUS transmissions recived through Popoto
     else if (j.contains("Cargo"))
@@ -631,7 +660,7 @@ void goby::acomms::PopotoDriver::ProcessJSON(const std::string& message,
 
         // Goby header is first byte
         uint8_t goby_header = static_cast<uint8_t>(cargo[0]);
-        DecodeJanusCargoHeader(goby_header, modem_msg);
+        DecodePayloadHeader(goby_header, modem_msg);
 
         // Source/dest from Popoto fields
         modem_msg.set_src(j.value("StationID", 0));
@@ -681,7 +710,7 @@ void goby::acomms::PopotoDriver::ProcessJSON(const std::string& message,
     else if (label == "Data")
     {
         std::string data = json_to_binary(j["Data"]);
-        DecodeJanusCargoHeader(data[0], modem_msg);
+        DecodePayloadHeader(data[0], modem_msg);
         if (modem_msg.type() == protobuf::ModemTransmission::DATA)
             *modem_msg.add_frame() = data.substr(2);
         else if (modem_msg.type() == protobuf::ModemTransmission::ACK){
@@ -712,14 +741,28 @@ void goby::acomms::PopotoDriver::ProcessJSON(const std::string& message,
 
 void goby::acomms::PopotoDriver::update_cfg(const protobuf::DriverConfig& cfg)
 {
-    if (!cfg.GetExtension(popoto::protobuf::config).has_modem_power()) return;
-    double new_power = cfg.GetExtension(popoto::protobuf::config).modem_power();
+    driver_cfg_.MergeFrom(cfg);
+    const auto& pcfg = cfg.GetExtension(popoto::protobuf::config);
 
-    std::stringstream message;
-    message << "setvaluef TxPowerWatts " << new_power << "\n";
-    signal_and_write(message.str());
-    
-    modem_p = new_power;
+    if (pcfg.has_modem_power()) {
+        modem_p = pcfg.modem_power();
+        std::stringstream raw;
+        raw << "setvaluef TxPowerWatts " << modem_p << "\n";
+        signal_and_write(raw.str());
+    }
+    if (pcfg.has_payload_mode()) {
+        std::stringstream raw;
+        raw << "setvaluei PayloadMode " << pcfg.payload_mode() << "\n";
+        signal_and_write(raw.str());
+    }
+    if (pcfg.has_application_type()) {
+        application_type = pcfg.application_type();
+    }
+    if (pcfg.has_carrier_frequency() && pcfg.carrier_frequency() != 0) {
+        std::stringstream raw;
+        raw << "setcarrier " << pcfg.carrier_frequency() << "\n";
+        signal_and_write(raw.str());
+    }
 }
 
 // This is a placeholder for the moment.
@@ -751,7 +794,7 @@ void Popoto0PCMHandler(void *Pcm, int Len)
     pegCount++;
 }
 
-std::uint8_t goby::acomms::PopotoDriver::CreateJanusCargoHeader(const protobuf::ModemTransmission& m){
+std::uint8_t goby::acomms::PopotoDriver::CreatePayloadHeader(const protobuf::ModemTransmission& m){
     std::uint8_t header{0};
     if (m.type() == protobuf::ModemTransmission::DATA){
         header |= ( GOBY_DATA_TYPE & 0b11 ) << 6;
@@ -766,7 +809,7 @@ std::uint8_t goby::acomms::PopotoDriver::CreateJanusCargoHeader(const protobuf::
     return header;
 }
 
-void goby::acomms::PopotoDriver::DecodeJanusCargoHeader(std::uint8_t header, protobuf::ModemTransmission& m){
+void goby::acomms::PopotoDriver::DecodePayloadHeader(std::uint8_t header, protobuf::ModemTransmission& m){
     int frame_number = header & 0b00111111;
     m.set_type((( (header >> 6) & 0b11 ) == GOBY_ACK_TYPE ) ? protobuf::ModemTransmission::ACK: protobuf::ModemTransmission::DATA);
     if (m.type() == protobuf::ModemTransmission::DATA)

@@ -66,6 +66,8 @@ class PopotoDriver : public ModemDriverBase
     void send(protobuf::ModemTransmission& msg);
     void play_file(protobuf::ModemTransmission& msg);
     void send_ping(protobuf::ModemTransmission& msg);
+
+    void popoto_update_power(protobuf::ModemTransmission& msg);
     
     void send_wake(void);
     void send_range_request(int dest);
@@ -75,9 +77,9 @@ class PopotoDriver : public ModemDriverBase
     void parse_in(const std::string& in, std::map<std::string, std::string>* out);
     void signal_and_write(const std::string& raw);
 
-    std::uint8_t CreateJanusCargoHeader(const protobuf::ModemTransmission& m);
+    std::uint8_t CreatePayloadHeader(const protobuf::ModemTransmission& m);
     
-    void DecodeJanusCargoHeader(std::uint8_t header, protobuf::ModemTransmission& m);
+    void DecodePayloadHeader(std::uint8_t header, protobuf::ModemTransmission& m);
     void DecodePopotoHeader(std::vector<uint8_t> data, protobuf::ModemTransmission& m);
 
     void ProcessJSON(const std::string& message, protobuf::ModemTransmission& modem_msg);
