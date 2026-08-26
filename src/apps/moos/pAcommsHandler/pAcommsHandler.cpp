@@ -196,8 +196,14 @@ goby::apps::moos::CpAcommsHandler::CpAcommsHandler()
     subscribe(cfg_.moos_var().prefix() + cfg_.moos_var().driver_reset(),
               &CpAcommsHandler::handle_driver_reset, this);
 
+    subscribe(cfg_.moos_var().prefix() + cfg_.moos_var().driver_swap(),
+              &CpAcommsHandler::handle_driver_swap, this);
+
     subscribe_pb(cfg_.moos_var().prefix() + cfg_.moos_var().driver_cfg_update(),
                  &CpAcommsHandler::handle_driver_cfg_update, this);
+
+    subscribe_pb(cfg_.moos_var().prefix() + cfg_.moos_var().driver_cfg_update_by_type(),
+               &CpAcommsHandler::handle_driver_cfg_update_by_type, this);
 
     subscribe(cfg_.moos_var().prefix() + cfg_.moos_var().driver_receive(),
               &CpAcommsHandler::handle_external_driver_receive, this);
@@ -533,7 +539,7 @@ void goby::apps::moos::CpAcommsHandler::process_configuration()
                                  << "or LD_LIBRARY_PATH" << std::endl;
         }
 
-        glog << group("pAcommsHandler") << "Loading shared library dccl codecs." << std::endl;
+        glog.is(VERBOSE) && glog << group("pAcommsHandler") << "Loading shared library dccl codecs." << std::endl;
     }
 
     // set id codec before shared library load
@@ -973,6 +979,107 @@ void goby::apps::moos::CpAcommsHandler::driver_reset(
         }
         break;
     }
+}  
+
+void goby::apps::moos::CpAcommsHandler::handle_driver_cfg_update_by_type(
+      const goby::acomms::protobuf::DriverConfig& cfg)
+{
+    bool driver_found = false;
+    for (auto& driver : drivers_)
+    {
+        if (goby::acomms::ModemDriverBase::driver_name(*driver.second) == goby::acomms::ModemDriverBase::driver_name(cfg))
+        {
+            driver_found = true;
+            if (driver.first && !driver_restart_time_.count(driver.first)) {
+                try {
+                    driver.first->update_cfg(cfg);
+                    publish(cfg_.moos_var().prefix() + cfg_.moos_var().driver_cfg_updated(),
+                                goby::acomms::ModemDriverBase::driver_name(*driver.second));
+                }
+                catch (goby::acomms::ModemDriverException& e)
+                {
+                    driver_reset(driver.first, e);
+                }
+            }
+        }
+    }    
+    if (!driver_found)
+        glog.is(WARN) && glog << group("pAcommsHandler")
+                            << "Could not find driver with name: "
+                            << goby::acomms::ModemDriverBase::driver_name(cfg)
+                            << " to update";
+}
+
+void goby::apps::moos::CpAcommsHandler::handle_driver_swap(const CMOOSMsg& msg)
+{
+    driver_swap(driver_,
+                goby::acomms::ModemDriverException(
+                    "Manual swap", goby::acomms::protobuf::ModemDriverStatus::MANUAL_SWAP),
+                msg);
+}
+
+void goby::apps::moos::CpAcommsHandler::driver_swap(
+    const std::shared_ptr<goby::acomms::ModemDriverBase> driver,
+    const goby::acomms::ModemDriverException& e,
+    const CMOOSMsg& msg)
+{
+    if (driver != driver_)
+        return;
+
+    bool found_driver = false;
+    auto new_it = drivers_.end();
+    std::string requested_driver = msg.GetString();
+
+    for (auto it = drivers_.begin(); it != drivers_.end(); ++it)
+    {
+        if (goby::acomms::ModemDriverBase::driver_name(*it->second) == requested_driver)
+        {
+            new_it = it;
+            found_driver = true;
+        }
+    } 
+
+    if (!found_driver) 
+    {
+        glog.is(WARN) && glog << group("pAcommsHandler") << "Driver not found: " << requested_driver << std::endl;
+        return;
+    }
+
+    auto old_it = drivers_.find(driver);
+    if (new_it == old_it)
+    {
+        glog.is(WARN) && glog << group("pAcommsHandler") << "The requested driver to swap to is already running"
+                          << std::endl;
+        return;
+    }
+
+    glog.is(VERBOSE) && glog << group("pAcommsHandler") << "Driver exception: " << e.what()
+                          << std::endl;
+    glog.is(VERBOSE) && glog << group("pAcommsHandler") << "Unbinding driver: " << driver
+                          << std::endl;
+
+    // unbind signals to old driver
+    driver_unbind();
+
+    // new primary driver_
+    driver_ = new_it->first;
+
+    goby::acomms::protobuf::DriverConfig& new_config = *(new_it->second);
+    goby::acomms::protobuf::DriverConfig& old_config = *(old_it->second);
+
+    publish(cfg_.moos_var().prefix() + cfg_.moos_var().active_driver(),
+                    goby::acomms::ModemDriverBase::driver_name(new_config));
+
+    // swap the modem ids
+    int new_id = old_config.modem_id();
+    old_config.set_modem_id(new_config.modem_id());
+    new_config.set_modem_id(new_id);
+
+    // bind the correct signals
+    driver_bind();
+
+    glog.is(VERBOSE) && glog << group("pAcommsHandler")
+                    << "Now using: " << requested_driver << " as the new primary." << std::endl;
 }
 
 void goby::apps::moos::CpAcommsHandler::restart_drivers()
@@ -999,6 +1106,10 @@ void goby::apps::moos::CpAcommsHandler::restart_drivers()
         {
             glog.is(DEBUG1) && glog << "Starting up driver: " << driver << std::endl;
             driver->startup(*drivers_[driver]);
+
+            if (driver == driver_)
+                publish(cfg_.moos_var().prefix() + cfg_.moos_var().active_driver(),
+                        goby::acomms::ModemDriverBase::driver_name(*drivers_[driver]));
         }
         catch (goby::acomms::ModemDriverException& e)
         {

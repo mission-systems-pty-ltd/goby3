@@ -144,6 +144,7 @@ class CpAcommsHandler : public goby::moos::GobyMOOSApp
     void handle_driver_reset(const CMOOSMsg& msg);
 
     void handle_driver_cfg_update(const goby::acomms::protobuf::DriverConfig& cfg);
+    void handle_driver_cfg_update_by_type(const goby::acomms::protobuf::DriverConfig& cfg);
 
     void handle_encode_on_demand(const goby::acomms::protobuf::ModemTransmission& request_msg,
                                  google::protobuf::Message* data_msg);
@@ -157,6 +158,12 @@ class CpAcommsHandler : public goby::moos::GobyMOOSApp
                  const goby::acomms::ModemDriverException& e,
                  protobuf::pAcommsHandlerConfig::DriverFailureApproach::DriverFailureTechnique =
                      cfg_.driver_failure_approach().technique());
+    
+    void handle_driver_swap(const CMOOSMsg& msg);
+    void
+    driver_swap(const std::shared_ptr<goby::acomms::ModemDriverBase> driver,
+                const goby::acomms::ModemDriverException& e,
+                const CMOOSMsg& msg);
 
     void restart_drivers();
 
