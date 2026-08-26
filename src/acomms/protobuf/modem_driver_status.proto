@@ -31,6 +31,7 @@ message ModemDriverStatus
         STARTUP_FAILED = 3;
         INVALID_CONFIGURATION = 4;
         MANUAL_RESET = 5;
+        MANUAL_SWAP = 6;
     }
 
     required Status status = 4;
