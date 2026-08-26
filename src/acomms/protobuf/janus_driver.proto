@@ -32,17 +32,17 @@ message Config
 
     optional uint32 pset_id = 4 [
         default = 1,
-        (dccl.field).min = 1,
+        (dccl.field).min = 0,
         (dccl.field).max = 255,
-        (goby.field).description = 
-            "Parameter Set ID"
+        (goby.field).description =
+            "Parameter Set ID. 0 means: ignore pset_file and use pset_center_freq/pset_bandwidth directly instead"
     ];
 
     optional string pset_file = 5 [
         default = "/usr/local/share/janus/etc/parameter_sets.csv",
         (dccl.field).max_length = 50,
         (goby.field).description =
-            "Parameter file to read center freq and bandwidth from. Will be ignored if pset_center_freq and pset_bandwidth are not zero"  
+            "Parameter file to read center freq and bandwidth from, by pset_id. Ignored entirely when pset_id is 0"
     ];
 
     optional uint32 pset_center_freq = 6 [
