@@ -40,8 +40,9 @@ endif()
 get_target_property(GOBY_INCLUDE_DIR goby INTERFACE_INCLUDE_DIRECTORIES)
 
 # goby_clang_tool interfaces files
-get_filename_component(GOBY_INTERFACES_DIR ${GOBY_INCLUDE_DIR}/../share/goby/interfaces ABSOLUTE)
-if(NOT EXISTS ${GOBY_INTERFACES_DIR})
+list(GET GOBY_INCLUDE_DIR -1 GOBY_OWN_INCLUDE_DIR)
+get_filename_component(GOBY_INTERFACES_DIR "${GOBY_OWN_INCLUDE_DIR}/../share/goby/interfaces" ABSOLUTE)
+if(NOT EXISTS "${GOBY_INTERFACES_DIR}")
   unset(GOBY_INTERFACES_DIR)
 endif()
   
