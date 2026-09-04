@@ -273,11 +273,11 @@ void goby::apps::moos::CpAcommsHandler::handle_mac_cycle_update(const CMOOSMsg& 
     goby::acomms::protobuf::MACUpdate update_msg;
     parse_for_moos(msg.GetString(), &update_msg);
 
-    glog << group("pAcommsHandler") << "got update for MAC: " << update_msg << std::endl;
+    glog.is(VERBOSE) && glog << group("pAcommsHandler") << "got update for MAC: " << update_msg << std::endl;
 
     if (update_msg.dest() != cfg_.modem_id())
     {
-        glog << group("pAcommsHandler") << "update not for us" << std::endl;
+        glog.is(VERBOSE) && glog << group("pAcommsHandler") << "update not for us" << std::endl;
         return;
     }
 
@@ -411,8 +411,17 @@ void goby::apps::moos::CpAcommsHandler::handle_driver_cfg_update(
         if (driver.second->modem_id() == cfg.modem_id())
         {
             driver_found = true;
-            if (driver.first && !driver_restart_time_.count(driver.first))
-                driver.first->update_cfg(cfg);
+            if (driver.first && !driver_restart_time_.count(driver.first)) {
+                try {
+                    driver.first->update_cfg(cfg);
+                    publish(cfg_.moos_var().prefix() + cfg_.moos_var().driver_cfg_updated(),
+                                goby::acomms::ModemDriverBase::driver_name(*driver.second));
+                }
+                catch (goby::acomms::ModemDriverException& e)
+                {
+                    driver_reset(driver.first, e);
+                }
+            }
         }
     }
     if (!driver_found)
@@ -533,7 +542,7 @@ void goby::apps::moos::CpAcommsHandler::process_configuration()
                                  << "or LD_LIBRARY_PATH" << std::endl;
         }
 
-        glog << group("pAcommsHandler") << "Loading shared library dccl codecs." << std::endl;
+        glog.is(VERBOSE) && glog << group("pAcommsHandler") << "Loading shared library dccl codecs." << std::endl;
     }
 
     // set id codec before shared library load
@@ -973,7 +982,7 @@ void goby::apps::moos::CpAcommsHandler::driver_reset(
         }
         break;
     }
-}
+}  
 
 void goby::apps::moos::CpAcommsHandler::restart_drivers()
 {

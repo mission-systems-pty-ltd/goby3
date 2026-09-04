@@ -40,6 +40,7 @@
 #include <map>     // for map
 #include <string>  // for string
 #include <vector>  // for vector
+#include <deque>   // for deque
 
 #include "goby/acomms/modemdriver/driver_base.h"   // for ModemDriverBase
 #include "goby/acomms/protobuf/driver_base.pb.h"   // for DriverConfig
@@ -154,6 +155,8 @@ class PopotoDriver : public ModemDriverBase
     const std::string setvalf = "setvaluef";
     const std::string getvali = "getvaluei";
     const std::string getvalf = "getvaluef";
+
+    std::deque<protobuf::ModemTransmission> pending_tx_;
 };
 } // namespace acomms
 } // namespace goby

@@ -116,6 +116,8 @@ message pAcommsHandlerConfig
 
         optional string driver_reset = 400 [default = "DRIVER_RESET"];
 
+        optional string driver_cfg_updated = 404 [default = "DRIVER_CONFIG_UPDATED"];
+
         optional string ifrontseat_data_out = 500 [default = "IFS_DATA_OUT"];
     }
     optional MOOSVariables moos_var = 10;

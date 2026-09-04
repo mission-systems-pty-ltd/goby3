@@ -381,7 +381,6 @@ void goby::acomms::PopotoDriver::send(protobuf::ModemTransmission& msg)
     std::string jsonStr = binary_to_json(&header, 1);
     if (msg.type() == protobuf::ModemTransmission::DATA)
     {
-        signal_transmit_result(msg);
         std::vector<std::uint8_t> payload(msg.frame(0).begin(), msg.frame(0).end());
         jsonStr += "," + binary_to_json(&payload[0], payload.size());
     }
@@ -409,6 +408,7 @@ void goby::acomms::PopotoDriver::send(protobuf::ModemTransmission& msg)
     glog.is(DEBUG1) && glog << raw.str() << std::endl;
 
     // Send over the wire
+    pending_tx_.push_back(msg);
     signal_and_write(raw.str());
 }
 
@@ -720,6 +720,11 @@ void goby::acomms::PopotoDriver::ProcessJSON(const std::string& message,
     else if (label == "Alert")
     {
         glog.is(DEBUG1) && glog << "Alert: " << j["Alert"] << std::endl;
+        if (j["Alert"] == "TxComplete" && !pending_tx_.empty())
+        {
+            ModemDriverBase::signal_transmit_result(pending_tx_.front());
+            pending_tx_.pop_front();
+        }
     }
     else if (label == "SNRdB")
     {

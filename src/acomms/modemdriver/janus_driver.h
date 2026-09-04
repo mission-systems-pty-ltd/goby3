@@ -29,12 +29,14 @@
 #include <map>      // for map
 #include <string>   // for string
 #include <vector>   // for vector
+#include <mutex>
 
 #include "goby/acomms/modemdriver/driver_base.h"   // for ModemDriverBase
 #include "goby/acomms/protobuf/driver_base.pb.h"   // for DriverConfig
 #include "goby/acomms/protobuf/modem_message.pb.h" // for ModemTransmission
 #include "goby/acomms/protobuf/janus_driver.pb.h" // for Config, MessageTy...
 #include "goby/util/thirdparty/nlohmann/json.hpp"  // for json
+#include "goby/acomms/modemdriver/driver_exception.h"
 
 extern "C" {
 #include <janus/janus.h>
@@ -45,6 +47,8 @@ extern "C" {
 #include <janus/dump.h>
 #include <janus/parameters.h>
 #include <janus/utils/go_cfar.h>
+#include <janus/carrier_sensing.h>
+#include <janus/rx_state.h>
 }
 
 // todo: probably should move this inside the class
@@ -96,6 +100,8 @@ class JanusDriver : public ModemDriverBase
     janus_simple_tx_t init_janus_tx();
     janus_simple_rx_t init_janus_rx();
     janus_parameters_t get_janus_params(const janus::protobuf::Config& config);
+
+    void update_cfg(const protobuf::DriverConfig& cfg) override; // Update driver config
     
     janus_parameters_t params_tx;
     janus_parameters_t params_rx;
@@ -131,7 +137,11 @@ class JanusDriver : public ModemDriverBase
     {
         DEFAULT_BAUD = 4800
     };
+    void note_tx_complete(const protobuf::ModemTransmission& msg);
+    void publish_tx_results();
 
+    std::mutex tx_result_mutex;
+    std::vector<protobuf::ModemTransmission> pending_tx_results_;
 
     protobuf::DriverConfig driver_cfg_; // configuration given to you at launch
     // rest is up to you!

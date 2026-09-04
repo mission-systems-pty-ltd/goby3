@@ -50,6 +50,9 @@
 #include "goby/exception.h"                        // for Exception
 #include "goby/time/convert.h"
 #include "janus_driver.h"
+
+#include <chrono>
+
 using goby::glog;
 using goby::util::hex_decode;
 using goby::util::hex_encode;
@@ -71,6 +74,9 @@ goby::acomms::JanusDriver::~JanusDriver(){
     janus_parameters_free(params_rx);
     janus_simple_tx_free(simple_tx);
     janus_simple_rx_free(simple_rx);
+    janus_carrier_sensing_free(carrier_sensing);
+    janus_packet_free(packet_rx);
+    janus_rx_state_free(state_rx);
 }
 
 janus_parameters_t goby::acomms::JanusDriver::get_janus_params(const janus::protobuf::Config& config){
@@ -109,6 +115,10 @@ janus_simple_tx_t goby::acomms::JanusDriver::init_janus_tx(){
     if (!simple_tx){
       glog.is(DEBUG1) && glog << "ERROR: failed to initialize transmitter" << std::endl;;
       janus_parameters_free(params_tx);
+      params_tx = nullptr;
+      throw(goby::acomms::ModemDriverException(
+            "Failed to initialize JANUS transmitter",
+            goby::acomms::protobuf::ModemDriverStatus::STARTUP_FAILED));
     }   
     return simple_tx;
 } // init janus tx
@@ -117,8 +127,11 @@ janus_simple_rx_t goby::acomms::JanusDriver::init_janus_rx(){
     simple_rx = janus_simple_rx_new(params_rx);
     if (!simple_rx){
       glog.is(DEBUG1) && glog << "ERROR: failed to initialize receiver" << std::endl;
-      exit(1);
       janus_parameters_free(params_rx);
+      params_rx = nullptr;
+      throw(goby::acomms::ModemDriverException(
+            "Failed to initialize JANUS receiver",
+            goby::acomms::protobuf::ModemDriverStatus::STARTUP_FAILED));
     }      
     
     carrier_sensing = janus_carrier_sensing_new(janus_simple_rx_get_rx(simple_rx));
@@ -136,15 +149,34 @@ void goby::acomms::JanusDriver::startup(const protobuf::DriverConfig& cfg){
     tx_class_id         = janus_driver_tx_cfg().class_id();
     rx_class_id         = janus_driver_rx_cfg().class_id();
     tx_application_type = janus_driver_tx_cfg().application_type();
-    rx_class_id         = janus_driver_rx_cfg().application_type();
+    rx_application_type = janus_driver_rx_cfg().application_type();
     simple_tx           = init_janus_tx();
     simple_rx           = init_janus_rx();
 } // startup
 
 void goby::acomms::JanusDriver::shutdown(){
+    if (params_tx) { janus_parameters_free(params_tx); params_tx = nullptr; }
+    if (params_rx) { janus_parameters_free(params_rx); params_rx = nullptr; }
+    if (simple_tx) { janus_simple_tx_free(simple_tx); simple_tx = nullptr; }
+    if (simple_rx) { janus_simple_rx_free(simple_rx); simple_rx = nullptr; }
     ModemDriverBase::modem_close();
-} // shutdown
+}  // shutdown
 
+void goby::acomms::JanusDriver::update_cfg(const protobuf::DriverConfig& cfg)
+{
+    driver_cfg_.MergeFrom(cfg);
+    
+    janus_parameters_free(params_tx);
+    janus_parameters_free(params_rx);
+    janus_simple_tx_free(simple_tx);
+    janus_simple_rx_free(simple_rx);
+    
+    params_tx = get_janus_params(janus_driver_tx_cfg());
+    params_rx = get_janus_params(janus_driver_rx_cfg());
+    simple_tx = init_janus_tx();
+    simple_rx = init_janus_rx();
+}
+  
 void goby::acomms::JanusDriver::append_crc16(std::vector<std::uint8_t> &vec){
     std::uint16_t crc = janus_crc_16(vec.data(),vec.size(),0);
     vec.push_back(static_cast<std::uint8_t>(crc >> 8));
@@ -179,14 +211,41 @@ void goby::acomms::JanusDriver::send_janus_packet(const protobuf::ModemTransmiss
 
     janus_app_fields_free(app_fields);
     janus_tx_state_t state = janus_tx_state_new((params_tx->verbose > 1));
+
+
+    auto tx_start = std::chrono::steady_clock::now();
     janus_simple_tx_execute(simple_tx, packet, state);
+    auto tx_end = std::chrono::steady_clock::now();
+
+    double tx_duration_s = std::chrono::duration<double>(tx_end - tx_start).count();
+    glog.is(VERBOSE) && glog << group(glog_out_group()) << "JANUS transmit took "
+                                        << tx_duration_s << " s" << std::endl;
+
     if (params_tx->verbose > 0){
         janus_tx_state_dump(state);
         janus_packet_dump(packet);
     }
     janus_tx_state_free(state);
     janus_packet_free(packet);
+
+    note_tx_complete(msg);
 } // send_janus_packet 
+
+void goby::acomms::JanusDriver::note_tx_complete(const protobuf::ModemTransmission& msg) {
+    std::lock_guard<std::mutex> lock(tx_result_mutex);
+    pending_tx_results_.push_back(msg);
+}
+
+void goby::acomms::JanusDriver::publish_tx_results() {
+    std::vector<protobuf::ModemTransmission> results;
+    {
+        std::lock_guard<std::mutex> lock(tx_result_mutex);
+        std::swap(results, pending_tx_results_);
+    }
+    for (const auto& result : results) {
+        ModemDriverBase::signal_transmit_result(result);
+    }
+}
 
 void goby::acomms::JanusDriver::send_janus_packet_thread(const protobuf::ModemTransmission& msg, std::vector<std::uint8_t> payload, bool ack){
     std::thread t(&goby::acomms::JanusDriver::send_janus_packet, this, msg, payload, ack);
@@ -208,7 +267,7 @@ void goby::acomms::JanusDriver::handle_initiate_transmission(const protobuf::Mod
     if (msg.frame_size() == 0)
         ModemDriverBase::signal_data_request(&msg);
 
-    next_frame_ += msg.frame_size();
+    next_frame_ += std::max<std::uint32_t>(1, msg.frame_size());
     if (next_frame_ >= 63)
         next_frame_ = 0;
 
@@ -347,6 +406,8 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
 
 // RX
 void goby::acomms::JanusDriver::do_work(){
+    publish_tx_results();
+
     janus_rx_msg_pkt packet_parsed;
     std::string binary_msg;
     int retval = janus_rx_execute(janus_simple_rx_get_rx(simple_rx), packet_rx, state_rx);
@@ -363,7 +424,7 @@ void goby::acomms::JanusDriver::do_work(){
                     glog.is(DEBUG1) && glog << "Ignoring msg because it is not meant for us." << std::endl;
                 } 
                 // acks only supported for 16-1 since we require a destination id
-                if(packet_parsed.ack_request && (rx_class_id == 16 && rx_application_type == 1) )
+                if(packet_parsed.ack_request && packet_parsed.destination_id == driver_cfg_.modem_id() && (rx_class_id == 16 && rx_application_type == 1) )
                     send_ack(packet_parsed.station_id, packet_parsed.destination_id, modem_msg.frame_start());
             } else{
                 glog.is(DEBUG1) && glog << "Recieved message with no cargo" << std::endl;
