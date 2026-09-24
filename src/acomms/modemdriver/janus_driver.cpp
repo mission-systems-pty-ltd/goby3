@@ -278,9 +278,11 @@ void goby::acomms::JanusDriver::handle_initiate_transmission(const protobuf::Mod
         glog.is(DEBUG1) && glog << group(glog_out_group()) << "Sending these data now: "
                                 << goby::util::hex_encode(msg.frame(0)) << std::endl;
 
-        std::vector<std::uint8_t> message = { get_goby_header(msg)}; 
-        std::vector<std::uint8_t> payload(msg.frame(0).begin(), msg.frame(0).end());
-        message.insert(message.end(), payload.begin(), payload.end());
+        std::vector<std::uint8_t> message;
+        if (janus_driver_tx_cfg().goby_header()) {
+            message.push_back(get_goby_header(msg));
+        }
+        message.insert(message.end(), msg.frame(0).begin(), msg.frame(0).end());
 
         // check if ack requested in modem transmission
         send_janus_packet_thread(msg,message,msg.ack_requested());
@@ -360,7 +362,12 @@ janus_rx_msg_pkt goby::acomms::JanusDriver::parse_janus_packet(const janus_packe
                 packet_parsed.ack_request = *app_fields->fields[i].value != '0';
         }
 
-        for (i = 0; i <  packet_parsed.cargo_size; ++i){ APPEND_FORMATTED(string_cargo, "%02X ", cargo[i]);}
+        // 16-1 cargo ends in a CRC16 that PayloadSize counts and the plugin has already
+        // checked and zeroed; it isn't part of the payload
+        unsigned payload_size = packet_parsed.cargo_size;
+        if (rx_class_id == 16 && rx_application_type == 1 && payload_size >= 2)
+            payload_size -= 2;
+        for (i = 0; i < payload_size; ++i){ APPEND_FORMATTED(string_cargo, "%02X ", cargo[i]);}
         if(!dest_set){ packet_parsed.destination_id = -1; }
         if(verbosity) {JANUS_DUMP("Packet", "Cargo (hex)", "%s", string_cargo);}
         packet_parsed.cargo_hex = string_cargo;
@@ -388,11 +395,17 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
     msg.set_src(packet.station_id);
     msg.set_dest(packet.destination_id);
     msg.set_rate(0);
-    uint8_t goby_header = std::stoi(packet.cargo_hex.substr(0,2), nullptr, 16); // first byte is goby header
-    DecodeGobyHeader(goby_header,msg);
+    int offset = 0; // offset into cargo_hex where the payload starts
+    if (janus_driver_rx_cfg().goby_header()) {
+        uint8_t goby_header = std::stoi(packet.cargo_hex.substr(0,2), nullptr, 16); // first byte is goby header
+        DecodeGobyHeader(goby_header,msg);
+        offset = 3; // skip "HH " (the header byte) in cargo_hex
+    } else {
+        msg.set_type(protobuf::ModemTransmission::DATA);
+    }
     if(msg.type() == protobuf::ModemTransmission::DATA){
         msg.set_ack_requested(packet.ack_request);
-        std::string cargo_no_header = packet.cargo_hex.substr(3);
+        std::string cargo_no_header = packet.cargo_hex.substr(offset);
         std::string converted_cargo;
         for(int i = 0; i < cargo_no_header.size(); i+=3){
             std::string entry = cargo_no_header.substr(i,2);
@@ -424,7 +437,7 @@ void goby::acomms::JanusDriver::do_work(){
                     glog.is(DEBUG1) && glog << "Ignoring msg because it is not meant for us." << std::endl;
                 } 
                 // acks only supported for 16-1 since we require a destination id
-                if(packet_parsed.ack_request && packet_parsed.destination_id == driver_cfg_.modem_id() && (rx_class_id == 16 && rx_application_type == 1) )
+                if(janus_driver_rx_cfg().goby_header() && packet_parsed.ack_request && packet_parsed.destination_id == driver_cfg_.modem_id() && (rx_class_id == 16 && rx_application_type == 1) )
                     send_ack(packet_parsed.station_id, packet_parsed.destination_id, modem_msg.frame_start());
             } else{
                 glog.is(DEBUG1) && glog << "Recieved message with no cargo" << std::endl;

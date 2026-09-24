@@ -193,6 +193,12 @@ message Config
         (goby.field).description = 
             "Colored Bit Probabilities: Medium to Low Probability Threshold"
     ];
+
+    optional bool goby_header = 28 [
+        default = true,
+        (goby.field).description =
+            "Prefix cargo with goby type/frame byte. Required for acks"
+    ];
 }
 
 // added 1444 in modem driver
