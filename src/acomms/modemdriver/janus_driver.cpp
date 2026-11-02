@@ -70,13 +70,11 @@ goby::acomms::JanusDriver::JanusDriver()
 }
 
 goby::acomms::JanusDriver::~JanusDriver(){
-    janus_parameters_free(params_tx);
-    janus_parameters_free(params_rx);
-    janus_simple_tx_free(simple_tx);
-    janus_simple_rx_free(simple_rx);
-    janus_carrier_sensing_free(carrier_sensing);
-    janus_packet_free(packet_rx);
-    janus_rx_state_free(state_rx);
+    // Guarded: shutdown() or a closed receiver leaves these null
+    free_janus_rx();
+    if (simple_tx) janus_simple_tx_free(simple_tx);
+    if (params_tx) janus_parameters_free(params_tx);
+    if (params_rx) janus_parameters_free(params_rx);
 }
 
 janus_parameters_t goby::acomms::JanusDriver::get_janus_params(const janus::protobuf::Config& config){
@@ -137,8 +135,17 @@ janus_simple_rx_t goby::acomms::JanusDriver::init_janus_rx(){
     carrier_sensing = janus_carrier_sensing_new(janus_simple_rx_get_rx(simple_rx));
     packet_rx = janus_packet_new(params_rx->verbose);
     state_rx  = janus_rx_state_new(params_rx);
+    queried_detection_time = 0;
     return simple_rx;
 } // init janus rx
+
+// Closes the input stream too. Carrier sensing reads the receiver, so it goes first.
+void goby::acomms::JanusDriver::free_janus_rx(){
+    if (carrier_sensing) { janus_carrier_sensing_free(carrier_sensing); carrier_sensing = 0; }
+    if (packet_rx)       { janus_packet_free(packet_rx);                packet_rx = 0; }
+    if (state_rx)        { janus_rx_state_free(state_rx);               state_rx = 0; }
+    if (simple_rx)       { janus_simple_rx_free(simple_rx);             simple_rx = 0; }
+} // free janus rx
 
 void goby::acomms::JanusDriver::startup(const protobuf::DriverConfig& cfg){
     driver_cfg_ = cfg;
@@ -151,30 +158,35 @@ void goby::acomms::JanusDriver::startup(const protobuf::DriverConfig& cfg){
     tx_application_type = janus_driver_tx_cfg().application_type();
     rx_application_type = janus_driver_rx_cfg().application_type();
     simple_tx           = init_janus_tx();
-    simple_rx           = init_janus_rx();
+    if (janus_driver_rx_cfg().rx_enabled())
+        simple_rx       = init_janus_rx();
 } // startup
 
 void goby::acomms::JanusDriver::shutdown(){
+    free_janus_rx();
     if (params_tx) { janus_parameters_free(params_tx); params_tx = nullptr; }
     if (params_rx) { janus_parameters_free(params_rx); params_rx = nullptr; }
     if (simple_tx) { janus_simple_tx_free(simple_tx); simple_tx = nullptr; }
-    if (simple_rx) { janus_simple_rx_free(simple_rx); simple_rx = nullptr; }
     ModemDriverBase::modem_close();
 }  // shutdown
 
 void goby::acomms::JanusDriver::update_cfg(const protobuf::DriverConfig& cfg)
 {
     driver_cfg_.MergeFrom(cfg);
-    
+
+    free_janus_rx();
+    janus_simple_tx_free(simple_tx);
     janus_parameters_free(params_tx);
     janus_parameters_free(params_rx);
-    janus_simple_tx_free(simple_tx);
-    janus_simple_rx_free(simple_rx);
-    
+
     params_tx = get_janus_params(janus_driver_tx_cfg());
     params_rx = get_janus_params(janus_driver_rx_cfg());
     simple_tx = init_janus_tx();
-    simple_rx = init_janus_rx();
+    if (janus_driver_rx_cfg().rx_enabled())
+        simple_rx = init_janus_rx();
+
+    glog.is(DEBUG1) && glog << group(glog_out_group()) << "JANUS receiver "
+                            << (simple_rx ? "open" : "closed") << std::endl;
 }
   
 void goby::acomms::JanusDriver::append_crc16(std::vector<std::uint8_t> &vec){
@@ -420,6 +432,8 @@ void goby::acomms::JanusDriver::to_modem_transmission(janus_rx_msg_pkt packet,pr
 // RX
 void goby::acomms::JanusDriver::do_work(){
     publish_tx_results();
+    if (!simple_rx)
+        return;
 
     janus_rx_msg_pkt packet_parsed;
     std::string binary_msg;

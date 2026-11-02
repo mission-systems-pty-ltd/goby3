@@ -199,6 +199,12 @@ message Config
         (goby.field).description =
             "Prefix cargo with goby type/frame byte. Required for acks"
     ];
+
+    optional bool rx_enabled = 29 [
+        default = true,
+        (goby.field).description =
+            "rx_config only: false closes the receiver and its input stream until set true again"
+    ];
 }
 
 // added 1444 in modem driver

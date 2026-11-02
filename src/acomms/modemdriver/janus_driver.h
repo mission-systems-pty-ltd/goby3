@@ -99,12 +99,13 @@ class JanusDriver : public ModemDriverBase
     unsigned int get_frame_num(std::string cargo);
     janus_simple_tx_t init_janus_tx();
     janus_simple_rx_t init_janus_rx();
+    void free_janus_rx();
     janus_parameters_t get_janus_params(const janus::protobuf::Config& config);
 
     void update_cfg(const protobuf::DriverConfig& cfg) override; // Update driver config
     
-    janus_parameters_t params_tx;
-    janus_parameters_t params_rx;
+    janus_parameters_t params_tx = 0;
+    janus_parameters_t params_rx = 0;
     unsigned int acomms_id;
     unsigned int tx_application_type;
     unsigned int rx_application_type;
@@ -112,12 +113,13 @@ class JanusDriver : public ModemDriverBase
     unsigned int rx_class_id;
     std::uint32_t next_frame_{0};
     static constexpr int DEFAULT_MTU_BYTES{1024};
-    janus_simple_tx_t  simple_tx;
-    janus_simple_rx_t  simple_rx;
+    janus_simple_tx_t  simple_tx = 0;
+    // Null while rx_config.rx_enabled is false
+    janus_simple_rx_t  simple_rx = 0;
     janus_packet_t packet_rx = 0;
     janus_rx_state_t state_rx = 0;
-    unsigned queried_detection_time;
-    janus_carrier_sensing_t carrier_sensing;
+    unsigned queried_detection_time = 0;
+    janus_carrier_sensing_t carrier_sensing = 0;
     protobuf::ModemTransmission modem_msg;
 
   private:
